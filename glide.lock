@@ -1,0 +1,14 @@
+hash: 71071f00798b1f4ce22ab71a61bbaccc0a10c7cb9e0a9acd0ac8c868c843d46d
+updated: 2018-05-24T01:08:01.558664212+02:00
+imports:
+- name: github.com/lib/pq
+  version: 90697d60dd844d5ef6ff15135d0203f65d2f53b8
+  subpackages:
+  - oid
+- name: github.com/lrstanley/girc
+  version: 102f17f86306c2152a8c6188f9bb8b0e7288de31
+- name: golang.org/x/crypto
+  version: 75e913eb8a8e3d31a97b216de09de106a7b07681
+  subpackages:
+  - sha3
+testImports: []
