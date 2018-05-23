@@ -1,0 +1,5 @@
+package statsbot
+
+func main() {
+
+}
