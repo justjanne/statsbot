@@ -45,3 +45,13 @@ create table "references" (
   source  text,
   target  text
 );
+
+CREATE TABLE public.groups (
+  channel int  NOT NULL,
+  nick    text NOT NULL,
+  "group" text NOT NULL,
+  CONSTRAINT groups_channel_nick_pk PRIMARY KEY (channel, nick),
+  CONSTRAINT groups_channels_id_fk FOREIGN KEY (channel) REFERENCES channels (id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+CREATE INDEX groups_channel_nick_index
+  ON public.groups (channel, nick);
