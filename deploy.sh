@@ -4,4 +4,4 @@ TAGS=$(git describe --always --tags HEAD)
 DEPLOYMENT=statsbot
 POD=statsbot
 
-kubectl -n statsbot set image deployment/$DEPLOYMENT $POD=$IMAGE:$TAGS
+kubectl set image deployment/$DEPLOYMENT $POD=$IMAGE:$TAGS
