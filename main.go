@@ -212,9 +212,8 @@ func handlePrivateMessage(channels map[string]IrcChannel, event girc.Event, clie
 			if len(parameters) == 1 {
 				channelName := parameters[0]
 				if channelData, ok := channels[channelName]; ok {
-					nick := event.Source.Name
-					hash := hashName(channelData.Salt, nick)
-					_, err := db.Exec("DELETE FROM users WHERE hash = $1 AND nick = $2", hash, nick)
+					hash := hashName(channelData.Salt, event.Source.Name)
+					_, err := db.Exec("DELETE FROM users WHERE hash = $1", hash)
 					if err != nil {
 						client.Cmd.Reply(event, "An error has occured, please try later again")
 						println(err.Error())
@@ -260,7 +259,7 @@ func logMessage(channelData IrcChannel, event girc.Event, client *girc.Client, c
 		}
 	}
 	for _, user := range users {
-		_, err := db.Exec("INSERT INTO \"references\" (time, source, target) VALUES ($1, $2, $3)", now, name, user)
+		_, err := db.Exec("INSERT INTO \"references\" (channel, time, source, target) VALUES ($1, $2, $3, $4)", channelData.Id, now, name, user)
 		if err != nil {
 			println(err.Error())
 		}
