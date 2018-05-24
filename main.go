@@ -1,17 +1,17 @@
 package main
 
 import (
-	"github.com/lrstanley/girc"
-	"os"
-	"fmt"
-	"strings"
-	"log"
-	"time"
-	_ "github.com/lib/pq"
-	"encoding/hex"
 	"database/sql"
-	"strconv"
+	"encoding/hex"
+	"fmt"
+	_ "github.com/lib/pq"
+	"github.com/lrstanley/girc"
 	"golang.org/x/crypto/scrypt"
+	"log"
+	"os"
+	"strconv"
+	"strings"
+	"time"
 )
 
 type Config struct {
@@ -161,50 +161,13 @@ func main() {
 		}
 	})
 
-	client.Handlers.Add(girc.PRIVMSG, func(c *girc.Client, e girc.Event) {
-		if len(e.Params) == 1 {
-			channelName := e.Params[0]
+	client.Handlers.Add(girc.PRIVMSG, func(client *girc.Client, event girc.Event) {
+		if len(event.Params) == 1 {
+			channelName := event.Params[0]
 			if channelData, ok := channels[channelName]; ok {
-				now := time.Now().UTC()
-
-				name := hashName(channelData.Salt, e.Source.Name)
-				content := strings.TrimSpace(e.Trailing)
-
-				channel := c.LookupChannel(channelName)
-
-				var users []string
-				if channel != nil {
-					for _, user := range channel.UserList {
-						if strings.Contains(content, user) {
-							users = append(users, hashName(channelData.Salt, user))
-						}
-					}
-				}
-
-				for _, user := range users {
-					_, err := db.Exec("INSERT INTO \"references\" (time, source, target) VALUES ($1, $2, $3)", now, name, user)
-					if err != nil {
-						println(err.Error())
-					}
-				}
-
-				message := IrcMessage{
-					Time:        now,
-					Channel:     channelData.Id,
-					Sender:      name,
-					Words:       len(strings.Split(content, " ")),
-					Characters:  len(content),
-					Question:    strings.HasSuffix(content, "?"),
-					Exclamation: strings.HasSuffix(content, "!"),
-					Caps:        content == strings.ToUpper(content),
-					Aggression:  false,
-					EmojiHappy:  strings.Contains(content, ":)"),
-					EmojiSad:    strings.Contains(content, ":("),
-				}
-				_, err := db.Exec("INSERT INTO messages (time, channel, sender, words, characters, question, exclamation, caps, aggression, emoji_happy, emoji_sad) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)", message.Time, message.Channel, message.Sender, message.Words, message.Characters, message.Question, message.Exclamation, message.Caps, message.Aggression, message.EmojiHappy, message.EmojiSad)
-				if err != nil {
-					println(err.Error())
-				}
+				logMessage(channelData, event, client, channelName, db)
+			} else if channelName == client.GetNick() {
+				handlePrivateMessage(channels, event, client, db)
 			}
 		}
 	})
@@ -218,5 +181,105 @@ func main() {
 		} else {
 			return
 		}
+	}
+}
+
+func handlePrivateMessage(channels map[string]IrcChannel, event girc.Event, client *girc.Client, db *sql.DB) {
+	split := strings.Split(event.Trailing, " ")
+	if len(split) >= 1 {
+		command := split[0]
+		parameters := split[1:]
+		if strings.EqualFold(command, "OPT-IN") {
+			if len(parameters) == 1 {
+				channelName := parameters[0]
+				if channelData, ok := channels[channelName]; ok {
+					nick := event.Source.Name
+					hash := hashName(channelData.Salt, nick)
+					_, err := db.Exec("INSERT INTO users (hash, nick) VALUES ($1, $2)", hash, nick)
+					if err != nil {
+						client.Cmd.Reply(event, "An error has occured, please try later again")
+						println(err.Error())
+					} else {
+						client.Cmd.Reply(event, "Opt-In successful")
+					}
+					return
+				}
+				client.Cmd.Reply(event, "Channel not found")
+			}
+			printUsageOptIn(client, event)
+			return
+		} else if strings.EqualFold(command, "OPT-OUT") {
+			if len(parameters) == 1 {
+				channelName := parameters[0]
+				if channelData, ok := channels[channelName]; ok {
+					nick := event.Source.Name
+					hash := hashName(channelData.Salt, nick)
+					_, err := db.Exec("DELETE FROM users WHERE hash = $1 AND nick = $2", hash, nick)
+					if err != nil {
+						client.Cmd.Reply(event, "An error has occured, please try later again")
+						println(err.Error())
+					} else {
+						client.Cmd.Reply(event, "Opt-Out successful")
+					}
+					return
+				}
+				client.Cmd.Reply(event, "Channel not found")
+			}
+			printUsageOptOut(client, event)
+			return
+		}
+	}
+	printUsage(client, event)
+}
+
+func printUsage(client *girc.Client, event girc.Event) {
+	client.Cmd.Reply(event, "Usage:")
+	client.Cmd.Reply(event, "OPT-IN [channel]")
+	client.Cmd.Reply(event, "OPT-OUT [channel]")
+}
+
+func printUsageOptIn(client *girc.Client, event girc.Event) {
+	client.Cmd.Reply(event, "Usage: OPT-IN [channel]")
+}
+
+func printUsageOptOut(client *girc.Client, event girc.Event) {
+	client.Cmd.Reply(event, "Usage: OPT-OUT [channel]")
+}
+
+func logMessage(channelData IrcChannel, event girc.Event, client *girc.Client, channelName string, db *sql.DB) {
+	now := time.Now().UTC()
+	name := hashName(channelData.Salt, event.Source.Name)
+	content := strings.TrimSpace(event.Trailing)
+	channel := client.LookupChannel(channelName)
+	var users []string
+	if channel != nil {
+		for _, user := range channel.UserList {
+			if strings.Contains(content, user) {
+				users = append(users, hashName(channelData.Salt, user))
+			}
+		}
+	}
+	for _, user := range users {
+		_, err := db.Exec("INSERT INTO \"references\" (time, source, target) VALUES ($1, $2, $3)", now, name, user)
+		if err != nil {
+			println(err.Error())
+		}
+	}
+	message := IrcMessage{
+		Time:        now,
+		Channel:     channelData.Id,
+		Sender:      name,
+		Words:       len(strings.Split(content, " ")),
+		Characters:  len(content),
+		Question:    strings.HasSuffix(content, "?"),
+		Exclamation: strings.HasSuffix(content, "!"),
+		Caps:        content == strings.ToUpper(content),
+		Aggression:  false,
+		EmojiHappy:  strings.Contains(content, ":)"),
+		EmojiSad:    strings.Contains(content, ":("),
+	}
+	_, err := db.Exec("INSERT INTO messages (time, channel, sender, words, characters, question, exclamation, caps, aggression, emoji_happy, emoji_sad) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)", message.Time, message.Channel, message.Sender, message.Words, message.Characters, message.Question, message.Exclamation, message.Caps, message.Aggression, message.EmojiHappy, message.EmojiSad)
+	if err != nil {
+		println(err.Error())
 	}
 }
