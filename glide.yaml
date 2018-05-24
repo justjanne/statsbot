@@ -4,4 +4,4 @@ import:
 - package: github.com/lib/pq
 - package: golang.org/x/crypto
   subpackages:
-  - sha3
+  - scrypt

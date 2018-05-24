@@ -7,11 +7,11 @@ import (
 	"strings"
 	"log"
 	"time"
-	"golang.org/x/crypto/sha3"
 	_ "github.com/lib/pq"
 	"encoding/hex"
 	"database/sql"
 	"strconv"
+	"golang.org/x/crypto/scrypt"
 )
 
 type Config struct {
@@ -59,6 +59,12 @@ func NewConfigFromEnv() Config {
 	return config
 }
 
+type IrcChannel struct {
+	Id   int
+	Name string
+	Salt string
+}
+
 type IrcMessage struct {
 	Time        time.Time
 	Channel     int
@@ -97,6 +103,14 @@ func (m *IrcMessage) ToString() string {
 	return fmt.Sprintf("IrcMessage{time=%s,channel=%d,sender=%s,words=%d,characters=%d,flags=[%s]}", m.Time.Format(time.RFC3339), m.Channel, m.Sender, m.Words, m.Characters, strings.Join(flags, ","))
 }
 
+func hashName(salt string, name string) string {
+	hash, err := scrypt.Key([]byte(name), []byte(salt), 32768, 8, 1, 32)
+	if err != nil {
+		panic(err)
+	}
+	return hex.EncodeToString(hash)
+}
+
 func main() {
 	config := NewConfigFromEnv()
 
@@ -122,20 +136,25 @@ func main() {
 	}
 	client := girc.New(ircConfig)
 
-	channels := map[string]int{}
+	channels := map[string]IrcChannel{}
 	client.Handlers.Add(girc.CONNECTED, func(c *girc.Client, e girc.Event) {
-		result, err := db.Query("SELECT id, channel FROM channels")
+		result, err := db.Query("SELECT id, channel, salt FROM channels")
 		if err != nil {
 			panic(err)
 		}
 		for result.Next() {
 			var id int
 			var name string
-			err := result.Scan(&id, &name)
+			var salt string
+			err := result.Scan(&id, &name, &salt)
 			if err != nil {
 				panic(err)
 			}
-			channels[name] = id
+			channels[name] = IrcChannel{
+				Id:   id,
+				Name: name,
+				Salt: salt,
+			}
 		}
 		for name := range channels {
 			c.Cmd.Join(name)
@@ -144,15 +163,34 @@ func main() {
 
 	client.Handlers.Add(girc.PRIVMSG, func(c *girc.Client, e girc.Event) {
 		if len(e.Params) == 1 {
-			channel := e.Params[0]
-			if id, ok := channels[channel]; ok {
-				name := hex.EncodeToString(sha3.New256().Sum([]byte(e.Source.Name)))
+			channelName := e.Params[0]
+			if channelData, ok := channels[channelName]; ok {
+				now := time.Now().UTC()
+
+				name := hashName(channelData.Salt, e.Source.Name)
 				content := strings.TrimSpace(e.Trailing)
-				// Add referenced nick part here
-				// c.LookupChannel(channel).UserList
+
+				channel := c.LookupChannel(channelName)
+
+				var users []string
+				if channel != nil {
+					for _, user := range channel.UserList {
+						if strings.Contains(content, user) {
+							users = append(users, hashName(channelData.Salt, user))
+						}
+					}
+				}
+
+				for _, user := range users {
+					_, err := db.Exec("INSERT INTO \"references\" (time, source, target) VALUES ($1, $2, $3)", now, name, user)
+					if err != nil {
+						println(err.Error())
+					}
+				}
+
 				message := IrcMessage{
-					Time:        time.Now().UTC(),
-					Channel:     id,
+					Time:        now,
+					Channel:     channelData.Id,
 					Sender:      name,
 					Words:       len(strings.Split(content, " ")),
 					Characters:  len(content),

@@ -1,5 +1,5 @@
-hash: 71071f00798b1f4ce22ab71a61bbaccc0a10c7cb9e0a9acd0ac8c868c843d46d
-updated: 2018-05-24T01:08:01.558664212+02:00
+hash: 9aa87de7030f5b57ee15949488773eed43794051d931d592b57d01ba08baa1b3
+updated: 2018-05-24T02:24:44.532048957+02:00
 imports:
 - name: github.com/lib/pq
   version: 90697d60dd844d5ef6ff15135d0203f65d2f53b8
@@ -10,5 +10,6 @@ imports:
 - name: golang.org/x/crypto
   version: 75e913eb8a8e3d31a97b216de09de106a7b07681
   subpackages:
+  - scrypt
   - sha3
 testImports: []
