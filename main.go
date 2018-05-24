@@ -126,7 +126,6 @@ func main() {
 		Nick:   config.Irc.Nick,
 		User:   config.Irc.Ident,
 		Name:   config.Irc.Realname,
-		Debug:  os.Stdout,
 	}
 	if config.Irc.SaslEnabled {
 		ircConfig.SASL = &girc.SASLPlain{

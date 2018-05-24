@@ -1,3 +1,13 @@
+create table channels (
+  id      serial not null
+    constraint channels_pkey primary key,
+  channel text   not null,
+  salt    text   not null
+);
+
+create unique index channels_channel_uindex
+  on channels (channel);
+
 create table messages (
   id          serial not null
     constraint messages_pkey primary key,
