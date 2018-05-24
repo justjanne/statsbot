@@ -156,6 +156,7 @@ func main() {
 			}
 		}
 		for name := range channels {
+			fmt.Printf("Joining %s\n", name)
 			c.Cmd.Join(name)
 		}
 	})
