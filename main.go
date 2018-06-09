@@ -104,7 +104,7 @@ func (m *IrcMessage) ToString() string {
 }
 
 func hashName(salt string, name string) string {
-	hash, err := scrypt.Key([]byte(name), []byte(salt), 32768, 8, 1, 32)
+	hash, err := scrypt.Key([]byte(strings.ToLower(name)), []byte(salt), 32768, 8, 1, 32)
 	if err != nil {
 		panic(err)
 	}
