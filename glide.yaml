@@ -1,7 +1,0 @@
-package: git.kuschku.de/justjanne/statsbot
-import:
-- package: github.com/lrstanley/girc
-- package: github.com/lib/pq
-- package: golang.org/x/crypto
-  subpackages:
-  - scrypt

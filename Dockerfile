@@ -1,13 +1,12 @@
-FROM golang as builder
-RUN curl https://glide.sh/get | sh
+FROM golang:alpine as builder
 
-WORKDIR /go/src/app
-COPY glide.lock glide.yaml ./
-RUN glide install
-COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -a app .
+WORKDIR /src
+COPY go.* ./
+RUN go mod download
+COPY *.go ./
+RUN CGO_ENABLED=0 GOOS=linux go build -o app .
 
 FROM scratch
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-COPY --from=builder /go/src/app/app /app
+COPY --from=builder /src/app /app
 ENTRYPOINT ["/app"]
